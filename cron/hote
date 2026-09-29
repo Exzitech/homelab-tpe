@@ -1,0 +1,11 @@
+# Hote Proxmox : copier en /etc/cron.d/homelab (scripts dans /usr/local/bin).
+# Le vzdump de 03:30 n'est pas ici : c'est un job Proxmox (Datacenter > Backup), avec
+# /usr/local/bin/vzdump-signal.sh en option "script" pour son signal.
+# Le 1er argument de avec-signal.sh est le nom du check sur healthchecks.io.
+SHELL=/bin/sh
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+*/5 * * * * root surveillance.sh >/dev/null 2>&1
+0   3 * * * root avec-signal.sh sauvegarde-hote sauvegarde-hote.sh >> /var/log/sauvegarde-hote.log 2>&1
+# apres les exports de la VM (03:15-03:25) et le vzdump (03:30)
+0   4 * * * root avec-signal.sh vm-fichiers sauvegarde-vm-fichiers.sh >> /var/log/sauvegarde-vm-fichiers.log 2>&1

@@ -1,0 +1,76 @@
+# Fichiers partages, reverse proxy HTTPS et coffre de mots de passe.
+# A deployer dans la VM, par ex. /srv/data/stack/nextcloud ; secrets et domaine dans .env
+# (voir .env.example, jamais dans le depot). Versions figees : une mise a jour est un choix.
+name: nextcloud
+
+services:
+  db:
+    image: mariadb:10.6
+    container_name: nextcloud-db
+    restart: unless-stopped
+    command: mariadbd --transaction-isolation=READ-COMMITTED --binlog-format=ROW
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: nextcloud
+      MYSQL_USER: nextcloud
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    volumes:
+      - ${DONNEES}/nextcloud/db:/var/lib/mysql
+
+  app:
+    image: nextcloud:34.0.3
+    container_name: nextcloud
+    restart: unless-stopped
+    depends_on: [db]
+    environment:
+      MYSQL_HOST: db
+      MYSQL_DATABASE: nextcloud
+      MYSQL_USER: nextcloud
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      NEXTCLOUD_TRUSTED_DOMAINS: cloud.${DOMAINE}
+      TRUSTED_PROXIES: 172.16.0.0/12   # reseaux Docker : le proxy est dans la meme pile
+      OVERWRITEPROTOCOL: https
+      OVERWRITECLIURL: https://cloud.${DOMAINE}
+      PHP_MEMORY_LIMIT: 512M
+      PHP_UPLOAD_LIMIT: 512M
+      APACHE_BODY_LIMIT: "1073741824"
+    volumes:
+      - ${DONNEES}/nextcloud/html:/var/www/html
+
+  # Reverse proxy + certificats Let's Encrypt. Seul le 443 est redirige par la box :
+  # les certificats sont obtenus par defi DNS-01, le port 80 reste ferme.
+  # 81 = interface d'administration, a ne jamais exposer (LAN ou VPN seulement).
+  npm:
+    image: jc21/nginx-proxy-manager:2.15.1
+    container_name: nginx-proxy
+    restart: unless-stopped
+    ports:
+      - "443:443"
+      - "81:81"
+    volumes:
+      - ${DONNEES}/npm/data:/data
+      - ${DONNEES}/npm/letsencrypt:/etc/letsencrypt
+
+  # Aucun port publie : NPM le joint par "vaultwarden:80".
+  # Inscriptions fermees, comptes crees par invitation depuis /admin. /admin n'est actif que si
+  # VW_ADMIN_TOKEN (hash argon2) est rempli ; le vider ensuite coupe l'administration.
+  vaultwarden:
+    image: vaultwarden/server:1.37.3
+    container_name: vaultwarden
+    restart: unless-stopped
+    environment:
+      DOMAIN: https://coffre.${DOMAINE}
+      SIGNUPS_ALLOWED: "false"
+      INVITATIONS_ALLOWED: "true"
+      SHOW_PASSWORD_HINT: "false"
+      ADMIN_TOKEN: ${VW_ADMIN_TOKEN:-}
+      IP_HEADER: X-Real-IP
+      # Notifications vers les applis mobiles par le relais Bitwarden (identifiants gratuits sur
+      # bitwarden.com/host) ; sans eux, pas de synchronisation instantanee sur les telephones.
+      PUSH_ENABLED: "true"
+      PUSH_INSTALLATION_ID: ${VW_PUSH_INSTALLATION_ID:-}
+      PUSH_INSTALLATION_KEY: ${VW_PUSH_INSTALLATION_KEY:-}
+      PUSH_RELAY_URI: https://api.bitwarden.eu
+      PUSH_IDENTITY_URI: https://identity.bitwarden.eu
+    volumes:
+      - ${DONNEES}/vaultwarden:/data

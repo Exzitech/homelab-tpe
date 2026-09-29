@@ -1,0 +1,49 @@
+# Gestion documentaire avec OCR (factures, contrats, courrier scanne).
+# Derivee du compose officiel "sqlite" de Paperless-ngx 3.2.1, versions figees.
+# SQLite plutot que PostgreSQL : quelques comptes, un conteneur et ~100 Mo de RAM en moins.
+# Sans Tika/Gotenberg (PDF et images seulement) ; pour les .docx/.eml, partir du compose
+# officiel "sqlite-tika".
+# Expose par le reverse proxy de la pile nextcloud (https://docs.<domaine> -> <ip de la VM>:8000).
+name: paperless
+
+services:
+  broker:
+    image: docker.io/valkey/valkey:9.1.2-alpine
+    container_name: paperless_broker
+    restart: unless-stopped
+    volumes:
+      - ${DONNEES}/paperless/redis:/data
+
+  webserver:
+    image: ghcr.io/paperless-ngx/paperless-ngx:3.2.1
+    container_name: paperless
+    restart: unless-stopped
+    mem_limit: 2g   # l'OCR d'un gros PDF monte haut : on protege les autres services de la VM
+    depends_on: [broker]
+    ports:
+      - "8000:8000"
+    volumes:
+      - ${DONNEES}/paperless/data:/usr/src/paperless/data
+      - ${DONNEES}/paperless/media:/usr/src/paperless/media
+      - ${DONNEES}/paperless/consume:/usr/src/paperless/consume
+      # Dossier d'entree dans Nextcloud : un fichier depose depuis le PC ou le telephone part dans
+      # Paperless, qui le supprime une fois avale (voir docs/paperless-nextcloud.md).
+      - "${NEXTCLOUD_ENTREE}:/usr/src/paperless/consume/nextcloud"
+      # export complet lu par la sauvegarde (scripts/sauvegarde-paperless.sh)
+      - ${DONNEES}/backups/paperless:/usr/src/paperless/export
+    env_file: .env
+    environment:
+      PAPERLESS_REDIS: redis://broker:6379
+      PAPERLESS_DBENGINE: sqlite
+      PAPERLESS_URL: https://docs.${DOMAINE}
+      PAPERLESS_TIME_ZONE: Europe/Paris
+      PAPERLESS_OCR_LANGUAGE: fra+eng
+      # 1 document a la fois, 2 pages en parallele : la VM reste reactive pendant l'OCR
+      PAPERLESS_TASK_WORKERS: 1
+      PAPERLESS_THREADS_PER_WORKER: 2
+      PAPERLESS_CONSUMER_RECURSIVE: "true"
+      # fichiers temporaires des envois Nextcloud (nom.ocTransferIdNNN.part)
+      PAPERLESS_CONSUMER_IGNORE_PATTERNS: '["\\.part$$"]'
+      # www-data, comme Nextcloud : sinon Paperless ne peut pas supprimer les fichiers avales
+      USERMAP_UID: 33
+      USERMAP_GID: 33

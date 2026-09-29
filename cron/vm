@@ -1,0 +1,12 @@
+# VM des services : copier en /etc/cron.d/homelab (scripts dans /usr/local/bin).
+# Les exports passent avant le vzdump de l'hote (03:30) et la copie de 04:00.
+SHELL=/bin/sh
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+*/5 * * * * root nextcloud-rescan.sh "/alice/files/A classer" >/dev/null 2>&1
+15  3 * * * root avec-signal.sh base-nextcloud sauvegarde-base-nextcloud.sh >> /var/log/sauvegarde-base-nextcloud.log 2>&1
+22  3 * * * root avec-signal.sh paperless sauvegarde-paperless.sh >> /var/log/sauvegarde-paperless.log 2>&1
+25  3 * * * root avec-signal.sh vaultwarden sauvegarde-vaultwarden.sh >> /var/log/sauvegarde-vaultwarden.log 2>&1
+# le coffre part hors site chaque nuit (quelques Ko), le reste une fois par semaine
+40  3 * * * root avec-signal.sh hors-site-coffre sauvegarde-hors-site.sh coffre /srv/data/backups/vaultwarden/dernier.tar.gz >> /var/log/sauvegarde-hors-site.log 2>&1
+0   5 * * 0 root avec-signal.sh hors-site sauvegarde-hors-site.sh complet /srv/data/backups /srv/data/nextcloud/html/data >> /var/log/sauvegarde-hors-site.log 2>&1

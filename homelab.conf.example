@@ -1,0 +1,35 @@
+# Reglages communs aux scripts. Copier en /etc/homelab.conf (root, chmod 600) sur l'hote
+# Proxmox ET dans la VM : chaque script ne lit que les variables dont il a besoin.
+# Les valeurs ci-dessous sont des exemples.
+
+# --- Machines ---
+VM_ID=100                          # VM Docker qui porte les services
+LXC_IDS=""                         # conteneurs LXC a surveiller, separes par des espaces
+VM_SSH=sauvegarde@10.0.0.10        # compte de la VM que l'hote utilise pour tirer les fichiers
+VM_CLE=/root/.ssh/id_ed25519_vm    # cle dediee (restreinte par from="<ip de l'hote>" cote VM)
+NIC=nic0                           # carte reseau physique de l'hote
+
+# --- Chemins ---
+DONNEES=/srv/data                  # disque de donnees de la VM
+SAUVEGARDES=/mnt/sauvegardes       # disque de sauvegarde de l'hote (SSD USB)
+
+# --- Services publics (verifies de l'exterieur, par le nom de domaine) ---
+URLS="https://cloud.exemple.fr/status.php https://coffre.exemple.fr/alive https://docs.exemple.fr/accounts/login/"
+PROXY_IP=10.0.0.10                 # machine qui sert les certificats (le reverse proxy)
+CERTIFICATS="cloud.exemple.fr coffre.exemple.fr docs.exemple.fr"
+DNS_LOCAL=""                       # IP d'un DNS local a verifier (AdGuard, Pi-hole) ; vide = aucun controle
+DNS_NOM=cloud.exemple.fr           # nom que ce DNS doit savoir resoudre
+
+# --- Seuils ---
+DISQUE_MAX=90                      # alerte au-dela de ce pourcentage d'occupation
+CERT_JOURS=14                      # alerte s'il reste moins de jours avant expiration
+
+# --- Alertes (healthchecks.io ou instance auto-hebergee) ---
+HC_URL=https://hc-ping.com
+HC_CLE_FICHIER=/etc/healthchecks-ping-key   # cle de ping du projet, chmod 600
+
+# --- Hors site (restic) ---
+# rclone:<remote>:<dossier> pour un stockage cloud, sftp:<hote>:<dossier> pour une machine amie
+RESTIC_REPOSITORY=rclone:cloud:sauvegarde
+RESTIC_PASSWORD_FILE=/root/.config/restic/mdp
+HORS_SITE_MAX_GO=13                # refuse l'envoi au-dela (quota du stockage, duree d'envoi)
